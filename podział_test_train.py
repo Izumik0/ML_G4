@@ -1,7 +1,7 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-df=pd.read_csv('Dataset_secundo_testo/clustering_results_4c.csv')
+df=pd.read_csv('Dataset_4f/clustering_results_4c.csv')
 
 train_data, test_data = train_test_split(
     df,

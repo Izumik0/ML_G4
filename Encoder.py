@@ -9,22 +9,27 @@ vocab_top=['-p','+p','-l','+l','d']
 vocab_seq=['1','2','3','4']
 vocab_classe=['0','1','2','3']
 
+
+# Którą metodą clustrowania
+
+
+
 #import csv z zestawem danych
-df=pd.read_csv('Dataset_secundo_testo/clustering_results_4c.csv')
+df=pd.read_csv('Dataset_4f/clustering_results_4c_4f.csv')
 
 train_data, test_data = train_test_split(
     df,
     test_size=0.2,
-    random_state=78,
-    stratify=df['cluster_results_KMedoids']
+    random_state=42,
+    stratify=df['cluster_results_KMeans']
 )
 
 
 #rozdzielenie zestawu danych
 X_train = train_data[['top', 'seq']]
-Y_train = train_data['cluster_results_KMedoids']
+Y_train = train_data['cluster_results_KMeans']
 X_test = test_data[['top', 'seq']]
-Y_test = test_data['cluster_results_KMedoids']
+Y_test = test_data['cluster_results_KMeans']
 
 # coping for sake of art
 X_test=X_test.copy()
@@ -66,13 +71,6 @@ encoded_seq=encoder_seq.fit_transform(expended_X_train_seq)
 encoded_seq_df=pd.DataFrame(encoded_seq, index=X_train.index, columns=encoder_seq.get_feature_names_out())
 X_train = pd.concat([X_train, encoded_seq_df], axis=1)
 
-# train set - Y
-class_list_test=[vocab_classe]*expended_Y_test.shape[1]
-encoder_classe=OneHotEncoder(categories=class_list_test, sparse_output=False, handle_unknown='ignore')
-encoded_classe=encoder_classe.fit_transform(Y_test.values.reshape(-1,1))
-encoded_classe_df=pd.DataFrame(encoded_classe, index=Y_test.index, columns=encoder_classe.get_feature_names_out())
-Y_test = pd.concat([Y_test, encoded_classe_df], axis=1)
-
 # test set - X
 pos_list_test=[vocab_top]*expended_X_test_pos.shape[1]
 encoder_pos=OneHotEncoder(categories=pos_list_test, sparse_output=False, handle_unknown='ignore')
@@ -84,13 +82,6 @@ encoder_seq=OneHotEncoder(categories=seq_list_test, sparse_output=False, handle_
 encoded_seq=encoder_seq.fit_transform(expended_X_test_seq)
 encoded_seq_df=pd.DataFrame(encoded_seq, index=X_test.index, columns=encoder_seq.get_feature_names_out())
 X_test = pd.concat([X_test, encoded_seq_df], axis=1)
-
-# test set - Y
-class_list_train=[vocab_classe]*expended_Y_train.shape[1]
-encoder_classe=OneHotEncoder(categories=class_list_train, sparse_output=False, handle_unknown='ignore')
-encoded_classe=encoder_classe.fit_transform(Y_train.values.reshape(-1,1))
-encoded_classe_df=pd.DataFrame(encoded_classe, index=Y_train.index, columns=encoder_classe.get_feature_names_out())
-Y_train = pd.concat([Y_train, encoded_classe_df], axis=1)
 
 
 # czyszczenie danych again
