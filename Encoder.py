@@ -2,6 +2,7 @@ from json import encoder
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
 import re
+from sklearn.model_selection import train_test_split
 
 # determinacja kolejnoścci w encodingu or some shit like that - to zapewnia stałość encodingu
 vocab_top=['-p','+p','-l','+l','d']
@@ -9,15 +10,21 @@ vocab_seq=['1','2','3','4']
 vocab_classe=['0','1','2','3']
 
 #import csv z zestawem danych
-df_train = pd.read_csv('Dataset_secundo_testo/train_set_RF_4c_1.csv')
-df_test = pd.read_csv('Dataset_secundo_testo/test_set_RF_4c_1.csv')
+df=pd.read_csv('Dataset_secundo_testo/clustering_results_4c.csv')
+
+train_data, test_data = train_test_split(
+    df,
+    test_size=0.2,
+    random_state=78,
+    stratify=df['cluster_results_KMedoids']
+)
 
 
 #rozdzielenie zestawu danych
-X_train = df_train[['top', 'seq']]
-Y_train = df_train['cluster_results_KMedoids']
-X_test = df_test[['top', 'seq']]
-Y_test = df_test['cluster_results_KMedoids']
+X_train = train_data[['top', 'seq']]
+Y_train = train_data['cluster_results_KMedoids']
+X_test = test_data[['top', 'seq']]
+Y_test = test_data['cluster_results_KMedoids']
 
 # coping for sake of art
 X_test=X_test.copy()
