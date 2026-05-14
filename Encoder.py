@@ -15,21 +15,21 @@ vocab_classe=['0','1','2','3']
 
 
 #import csv z zestawem danych
-df=pd.read_csv('Dataset_4f/clustering_results_4c_4f.csv')
+df=pd.read_csv('Dataset_4f_time_only/clustering_results_4c_4f.csv')
 
 train_data, test_data = train_test_split(
     df,
     test_size=0.2,
     random_state=42,
-    stratify=df['cluster_results_KMeans']
+    stratify=df['cluster_results_KMedoids']
 )
 
 
 #rozdzielenie zestawu danych
 X_train = train_data[['top', 'seq']]
-Y_train = train_data['cluster_results_KMeans']
+Y_train = train_data['cluster_results_KMedoids']
 X_test = test_data[['top', 'seq']]
-Y_test = test_data['cluster_results_KMeans']
+Y_test = test_data['cluster_results_KMedoids']
 
 # coping for sake of art
 X_test=X_test.copy()
@@ -87,8 +87,8 @@ X_test = pd.concat([X_test, encoded_seq_df], axis=1)
 # czyszczenie danych again
 X_train=X_train.drop(columns=['top','seq','split_top','split_seq'])
 X_test=X_test.drop(columns=['top','seq','split_top','split_seq'])
-Y_test=Y_test.drop(columns=['cluster_results_KMedoids'])
-Y_train=Y_train.drop(columns=['cluster_results_KMedoids'])
+Y_test=Y_test.drop(columns=['cluster_results_KMeans'])
+Y_train=Y_train.drop(columns=['cluster_results_KMeans'])
 X_train.to_csv('X_train.csv', index=False)
 X_test.to_csv('X_test.csv', index=False)
 Y_test.to_csv('Y_test.csv', index=False)
