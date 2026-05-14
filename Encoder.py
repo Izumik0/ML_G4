@@ -15,7 +15,7 @@ vocab_classe=['0','1','2','3']
 
 
 #import csv z zestawem danych
-df=pd.read_csv('Dataset_4f/clustering_results_4c_4f.csv')
+df=pd.read_csv('old_classy_datasets/Dataset_4f/clustering_results_4c_4f.csv')
 
 train_data, test_data = train_test_split(
     df,
