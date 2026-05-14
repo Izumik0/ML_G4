@@ -11,7 +11,7 @@ import plotly.express as px
 
 # importy danych - tu można zmieniać
 df=pd.read_csv('Database/Dataset_85/copy.csv')
-etykiety=['sredni_czas', 'stddevi', 'obecnosc','max_czas']
+etykiety=['sredni_czas', 'stddevi', 'mediana_czas','max_czas']
 
 
 df=df.fillna(0)
@@ -22,7 +22,7 @@ norm=MinMaxScaler().fit_transform(rzeczy)
 # tabela
 tab=pd.DataFrame(norm, columns=etykiety)
 #clustering - KMeans
-cluster_KMeans=KMeans(n_clusters=4, random_state=42)
+cluster_KMeans=KMeans(n_clusters=5, random_state=42)
 wynik_KMeans=cluster_KMeans.fit_predict(tab)
 kolumny=['top','seq']+etykiety
 zest=df[kolumny].copy()
@@ -41,7 +41,7 @@ fig_KMeans = px.scatter_3d(
 
 # clustering - KMedoids
 
-cluster_KMedoids=KMedoids(n_clusters=4, random_state=42)
+cluster_KMedoids=KMedoids(n_clusters=5, random_state=42)
 wynik_KMedoids=cluster_KMedoids.fit_predict(tab)
 zest['cluster_results_KMedoids']=wynik_KMedoids
 
@@ -59,4 +59,4 @@ fig_KMeans = px.scatter_3d(
 print(zest.head())
 print("Rozkład klas w KMeans:", zest['cluster_results_KMeans'].value_counts())
 print("Rozkład klas w KMedoids:", zest['cluster_results_KMedoids'].value_counts())
-zest.to_csv('clustering_results_4c_4f.csv', index=False)
+zest.to_csv('clustering_results_5c_4f.csv', index=False)
