@@ -1,241 +1,225 @@
-# Model_toptime — Documentation
+# Model_toptime — G-Quadruplex Residence Time Predictor
 
-**Notebook:** `Model_toptime.ipynb`  
-**Task:** Regression — predicting G-quadruplex conformation residence time (`sredni_czas`)  
-**Architecture:** `GQuadPredictor` — embedding-based fully connected network  
-**Dataset:** `clustering_results_4c_4f.csv` (4-fold topology × 4-sequence-type combinations)
+> **Task:** Regression — predicting mean conformation residence time (`sredni_czas`) of G-quadruplex DNA structures from discrete topology and sequence descriptors.
+
+---
+
+## Contents
+
+- [Overview](#overview)
+- [Dataset](#dataset)
+- [Tokenisation](#tokenisation)
+- [Data Split](#data-split)
+- [Model Architecture](#model-architecture)
+- [Training](#training)
+- [Results](#results)
+- [Model Saving](#model-saving)
+- [Known Issues & Caveats](#known-issues--caveats)
+- [Dependencies](#dependencies)
 
 ---
 
 ## Overview
 
-This notebook trains a neural network to predict the mean residence time (`sredni_czas`) of G-quadruplex DNA conformations from their discrete topological and sequence descriptors. Each sample is represented as a short token sequence of length 3, where each token encodes a paired (topology, sequence-type) label. The model learns dense embedding representations of these tokens before passing them through a regression head.
+G-quadruplex (G4) DNA structures can adopt multiple topological conformations, each with a characteristic residence time — how long the molecule stays in that conformation before switching. This notebook trains a small PyTorch neural network (`GQuadPredictor`) to predict this residence time purely from:
+
+- the **topology type** of each G4 unit (`-p`, `+p`, `-l`, `+l`, `d`)
+- the **sequence type** of each G4 unit (`1`–`4`)
+
+Each sample consists of three such units. The model converts these into learned embedding vectors, then regresses to a single output: the predicted mean residence time.
 
 ---
 
-## 1. Data
+## Dataset
 
-**Source file:** `../Database/Dataset_4f_time_only/clustering_results_4c_4f.csv`
-
-**Key columns used:**
+**File:** `clustering_results_4c_4f.csv`  
+**Path:** `../Database/Dataset_4f_time_only/`
 
 | Column | Description |
 |---|---|
-| `top` | Topology label string (e.g., `-p`, `+p`, `-l`, `+l`, `d`) |
-| `seq` | Sequence-type string (digits `1`–`4`) |
-| `sredni_czas` | Target — mean conformation residence time (float) |
+| `top` | Topology label string, e.g. `-p+p-l` |
+| `seq` | Sequence-type string, e.g. `121` |
+| `sredni_czas` | Target — mean residence time (float, units: ps–µs) |
 
-**Dataset size:** 1664 rows (after filtering; see below)
+**Filtering:** All rows where `sredni_czas == 0` are removed before training. The working dataset is ~1 664 non-zero rows.
 
-**Target value range (from output):**
-- Min: 0 ps
-- Max: 1 us
+> **Note:** An earlier version of the code included a commented-out alternative that sampled 5% of zero-time rows and concatenated them with the non-zero set. The current approach discards all zeros entirely, keeping the model focused on predicting actual non-trivial residence times.
 
 ---
 
-## 2. Tokenization
+## Tokenisation
 
-Each sample is converted into a sequence of 3 integer token IDs. The vocabulary is built by combining all topology prefixes with all sequence types:
+Each sample is represented as a fixed-length sequence of **3 integer token IDs** built from fused `{topology}_{sequence}` pairs.
 
+![Tokenisation pipeline](images/tokenisation.png)
+
+**Vocabulary construction:**
+
+```python
+vocab_top = ['-p', '+p', '-l', '+l', 'd']   # 5 topology types
+vocab_seq = ['1', '2', '3', '4']             # 4 sequence types
+# → 20 fused tokens: '-p_1', '-p_2', ..., 'd_4'
 ```
-vocab_top = ['-p', '+p', '-l', '+l', 'd']
-vocab_seq = ['1', '2', '3', '4']
-```
 
-This produces a vocabulary of **20 fused tokens** (`{top}_{seq}` pairs), e.g.:
-
-```
-{'-p_1': 0, '-p_2': 1, ..., 'd_4': 19}
-```
-
-**Tokenization pipeline:**
+**Per-row pipeline:**
 
 1. `splited_top` — regex extracts topology symbols from the `top` string (`[+-][pl]` or `d`)
-2. `splited_seq` — regex extracts sequence digits `1`–`4` from the `seq` string
+2. `splited_seq` — regex extracts digits `1`–`4` from the `seq` string  
 3. `tokens` — zips topology and sequence parts into fused token strings
-4. `tokenased` — maps fused tokens to integer IDs using the vocabulary
+4. `tokenised` — maps fused tokens → integer IDs via the vocabulary dict
 
-Each sample results in a list of exactly 3 integer IDs (sequence length fixed at 3).
-
----
-
-## 3. Data Filtering
-
-Before training, zero-valued targets are removed entirely:
-
-```python
-data = df_non_zero   # only rows where sredni_czas != 0
-```
-
-A commented-out alternative shows an earlier approach that sampled 5% of zero-time entries and concatenated them with non-zero rows. The current version discards all zeros, which focuses the model on predicting actual non-zero residence times.
-
-> **Note:** This filtering is applied **after** tokenization and **before** the train/val/test split, so all splits are drawn exclusively from non-zero samples.
+Each sample results in a list of exactly **3 integer IDs** (sequence length is always 3).
 
 ---
 
-## 4. Train / Validation / Test Split
+## Data Split
+
+![Data split](images/data_split.png)
+
+Two-step stratified-random split using `sklearn.model_selection.train_test_split`:
 
 ```python
-X_temp, X_test, Y_temp, Y_test = train_test_split(X, Y, test_size=0.15, random_state=42)
-X_train, X_val, Y_train, Y_val = train_test_split(X_temp, Y_temp, test_size=0.176, random_state=42)
+X_temp, X_test,  Y_temp, Y_test  = train_test_split(X, Y, test_size=0.15,  random_state=42)
+X_train, X_val,  Y_train, Y_val  = train_test_split(X_temp, Y_temp, test_size=0.176, random_state=42)
 ```
 
-The two-step split produces approximate proportions:
-
-| Split | Fraction | Approx. size (from ~1664 non-zero rows) |
+| Split | Fraction | Approx. size |
 |---|---|---|
-| Train | ~70% | ~1163 |
-| Validation | ~15% | ~249 |
-| Test | 15% | ~250 |
+| Train | ~70% | ~1 163 rows |
+| Validation | ~15% | ~249 rows |
+| Test | 15% | ~250 rows |
 
-Inputs are converted to `torch.long` tensors (required for `nn.Embedding`); targets are converted to `torch.float32` with shape `[N, 1]`.
+Inputs are cast to `torch.long` (required by `nn.Embedding`); targets to `torch.float32` with shape `[N, 1]`.
 
-**DataLoader:** batch size = 16, shuffle = True (train only). Validation and test loaders are defined but unused during the training loop — instead, full-tensor evaluation is used directly.
-
----
-
-## 5. Model Architecture — `GQuadPredictor`
-
-```
-Input: [batch, 3]  (3 integer token IDs)
-  ↓
-nn.Embedding(vocab_size=20, embedding_dim=6)
-  → [batch, 3, 6]
-  ↓
-Flatten → [batch, 18]
-  ↓
-Linear(18 → 32) + ReLU
-  ↓
-Linear(32 → 64) + ReLU
-  ↓
-Linear(64 → 32)
-  ↓
-Dropout(p=0.2)
-  ↓
-Linear(32 → 8)
-  ↓
-Linear(8 → 1)
-Output: [batch, 1]  (predicted residence time)
-```
-
-**Key design notes:**
-
-- The embedding layer maps each of the 20 discrete tokens to a 6-dimensional dense vector. These vectors are learned end-to-end during training.
-- The flattened embedding (3 × 6 = 18 features) is passed through 5 linear layers with a progressively narrowing bottleneck (64 → 32 → 8 → 1).
-- ReLU activations are only applied after the first two linear layers. The last three layers have no activation — the output is a raw real-valued scalar.
-- Dropout (p=0.2) is applied between the third and fourth linear layers for regularization.
-- No BatchNorm layers are used.
-
-**Parameter count (approximate):**
-
-| Layer | Parameters |
-|---|---|
-| Embedding | 20 × 6 = 120 |
-| fc1 (18→32) | 18×32 + 32 = 608 |
-| fc2 (32→64) | 32×64 + 64 = 2112 |
-| fc3 (64→32) | 64×32 + 32 = 2080 |
-| fc4 (32→8) | 32×8 + 8 = 264 |
-| fc5 (8→1) | 8×1 + 1 = 9 |
-| **Total** | **~3193** |
+DataLoader: batch size = 16, shuffle = True (train only). Validation and test sets are evaluated as full tensors directly rather than through their loaders.
 
 ---
 
-## 6. Training Configuration
+## Model Architecture
+
+![Architecture diagram](images/arch_diagram.png)
+
+```python
+class GQuadPredictor(nn.Module):
+    def __init__(self, vocab_size=20, embedding_dim=6, hidden_dim=32):
+        ...
+        self.embedding = nn.Embedding(20, 6)
+        self.fc1  = nn.Linear(18, 32)   # 18 = 3 tokens × 6 dims
+        self.relu = nn.ReLU()
+        self.fc2  = nn.Linear(32, 64)
+        self.relu2= nn.ReLU()
+        self.fc3  = nn.Linear(64, 32)
+        self.dropout = nn.Dropout(p=0.2)
+        self.fc4  = nn.Linear(32, 8)
+        self.fc5  = nn.Linear(8, 1)
+```
+
+| Layer | Shape | Params |
+|---|---|---|
+| `nn.Embedding` | `[batch, 3] → [batch, 3, 6]` | 120 |
+| Flatten | `[batch, 18]` | — |
+| `fc1` + ReLU | `18 → 32` | 608 |
+| `fc2` + ReLU | `32 → 64` | 2 112 |
+| `fc3` | `64 → 32` | 2 080 |
+| Dropout (p=0.2) | — | — |
+| `fc4` | `32 → 8` | 264 |
+| `fc5` | `8 → 1` | 9 |
+| **Total** | | **~3 193** |
+
+ReLU is applied only after `fc1` and `fc2`. The last three linear layers have no activation — the output is a raw real-valued scalar.
+
+---
+
+## Training
 
 | Hyperparameter | Value |
 |---|---|
-| Loss function | `nn.MSELoss` |
+| Loss | `nn.MSELoss` |
 | Optimizer | `Adam` |
 | Learning rate | `7.5e-5` |
 | Weight decay | `1.2e-5` |
-| Max epochs | 20000 |
+| Max epochs | 20 000 |
 | Batch size | 16 |
-| Early stopping patience | 50 (checks every epoch) |
+| Early stopping patience | 50 epochs |
 
-**Early stopping logic:**  
-A patience counter (`counter_dd`) increments each epoch the validation loss does not improve. Training halts when the counter reaches 50 consecutive non-improving epochs.
+**Early stopping:** a patience counter increments every epoch validation loss does not improve. Training halts after 50 consecutive non-improving epochs.
 
----
+### Loss curve
 
-## 7. Training Results
+![Loss curve](images/loss_curve.png)
 
-Training stopped at **epoch 4290** via early stopping.
+Training stopped at **epoch 4 290** via early stopping.
 
-**Loss curve summary (MSE):**
-
-| Epoch | Train Loss | Val Loss |
+| Epoch | Train MSE | Val MSE |
 |---|---|---|
-| 0 | ~1.59e11 | ~1.56e11 |
-| 1000 | ~3.65e10 | ~3.62e10 |
-| 2000 | ~2.86e10 | ~3.02e10 |
-| 3000 | ~2.33e10 | ~2.64e10 |
-| 4290 (stopped) | ~1.70e10 | ~2.27e10 |
+| 0 | ~1.59 × 10¹¹ | ~1.56 × 10¹¹ |
+| 1 000 | ~3.65 × 10¹⁰ | ~3.62 × 10¹⁰ |
+| 2 000 | ~2.86 × 10¹⁰ | ~3.02 × 10¹⁰ |
+| 3 000 | ~2.33 × 10¹⁰ | ~2.64 × 10¹⁰ |
+| 4 290 | ~1.70 × 10¹⁰ | ~2.27 × 10¹⁰ |
 
-> **Warning — loss scale anomaly:** The MSE values are in the range of 10¹⁰–10¹¹ throughout training. Given that `sredni_czas` values are in the range 0–0.6, a well-behaved MSE should be on the order of 0.01–0.1. This strongly suggests that at the time of the logged training run, the target values (`sredni_czas`) had **not yet been filtered** to the non-zero subset and/or were being read from a different data state than what was intended. The test evaluation metrics (see Section 8) suggest the model did produce meaningful predictions in its final evaluated state, so it is possible the loss logging corresponds to an earlier run on un-filtered data.
-
-The train loss decreases steadily; validation loss decreases more slowly and exhibits a train-val gap from approximately epoch 1050 onward, indicating mild overfitting.
+A train–validation gap is visible from around epoch 1 050 onward, indicating mild overfitting.
 
 ---
 
-## 8. Evaluation on Test Set
+## Results
 
 ```
 --- FINAL EXAM RESULTS ---
-On average, the model is off by: 99841.34 time units [ps]
+On average, the model is off by: 99841.34 time units
 R-squared Score (Accuracy proxy): 0.78
 ```
 
-**R² = 0.78** indicates that the model explains approximately 78% of the variance in the test set residence times — a reasonable result for a purely topology/sequence-based model with no structural features.
+**R² = 0.78** — the model explains ~78% of the variance in test-set residence times, a reasonable result for a model that uses only topology and sequence labels with no structural features.
 
-**MAE of 99841.34** is inconsistent with the `sredni_czas` range observed in the data printout. This suggests the MAE figure was computed on a different scale or an earlier version of the data where times were not normalized. The R² score is scale-independent and is the more reliable metric here.
-
-> **Recommendation:** Re-run evaluation after confirming the target scale is consistent between training and the printed `sredni_czas` values. If the raw times are in microseconds and `sredni_czas` values in the data print are already normalized, ensure both training and evaluation use the same representation.
-
-**Embedding visualization:** After training, learned embedding vectors are extracted (`model.embedding.weight.detach().numpy()`) and projected to 2D with PCA for visualization. The 20 token vectors are plotted with their labels, providing insight into how the model has arranged tokens in embedding space.
+After training, the learned 6-dimensional embedding vectors are extracted and projected to 2D with PCA for visual inspection of how the model organises the 20 token types in embedding space.
 
 ---
 
-## 9. Model Saving
-
-The trained model state dict is saved in two ways:
+## Model Saving
 
 ```python
-# Persistent file save
+# Persistent save
 torch.save(model.state_dict(), '../modele - wytrenowane/model_toptime_good_nomal.pth')
 
-# In-memory snapshot (not persisted across kernel restarts)
+# In-memory snapshot (lost on kernel restart)
 model_fast_save = model.state_dict()
 ```
 
 ---
 
-## 10. Auxiliary Code (Appendix Cells)
+## Known Issues & Caveats
 
-The notebook contains several utility/experimental cells after the main training block:
+### ⚠️ MSE loss scale anomaly
+The MSE values logged during training are in the 10¹⁰–10¹¹ range. Given that `sredni_czas` values are in the range 0–~0.6 (µs), a well-behaved MSE should be on the order of 0.01–0.1. The logged losses suggest that at the time of the run the target values may not have been filtered to the non-zero subset yet, or a different data state was in effect. The R² of 0.78 on the test set suggests the final evaluated model is meaningful; the MSE figures should be treated with caution.
 
-**Fast re-tokenization (Cell 17):** Repeats the full vocabulary construction and tokenization pipeline on a fresh load of the CSV. Useful for running inference or evaluation without re-running training.
+### ⚠️ MAE units mismatch
+The reported MAE of ~99 841 is inconsistent with the target range. This likely reflects a different scale or an earlier run on unnormalised targets. R² is scale-independent and is the more reliable metric here.
 
-**Target scaling exploration (Cells 18–20):** Two scaling approaches are computed and added as extra columns but not used in training:
-- `normalised_avg_time` — L2 normalization via `sklearn.preprocessing.normalize` (row-level, not meaningful for a 1D vector)
-- `min_max_avg_time` — Min-max scaling to [0, 1] via `MinMaxScaler`
+### ℹ️ Target scaling not used in training
+The notebook computes two scaling variants (`normalised_avg_time` via L2 norm and `min_max_avg_time` via MinMaxScaler) and exports them to `data_test.csv`, but neither is used during training. The model trains on raw `sredni_czas` values.
 
-These columns are exported to `data_test.csv` for inspection.
-
-**Embedding export (Cells 21–22):** Learned embedding vectors are transposed into a DataFrame with vocabulary tokens as column names and saved to `Vectory.csv`.
+### ℹ️ Val/Test DataLoaders unused
+`val_loader` and `test_loader` are defined but commented out. Evaluation uses full-tensor forward passes instead, which is fine for datasets of this size.
 
 ---
 
+## Dependencies
 
-## 12. Dependencies
-
-| Library | Usage |
+| Library | Purpose |
 |---|---|
 | `torch`, `torch.nn` | Model definition and training |
 | `pandas` | Data loading and manipulation |
 | `numpy` | Numerical operations |
-| `re` | Regex-based tokenization |
+| `re` | Regex-based tokenisation |
 | `sklearn.model_selection` | Train/val/test splitting |
-| `sklearn.decomposition.PCA` | Embedding visualization |
+| `sklearn.decomposition` | PCA for embedding visualisation |
 | `sklearn.metrics` | MAE and R² evaluation |
-| `sklearn.preprocessing` | Normalization and scaling (experimental) |
-| `matplotlib` | Plotting loss curves and evaluation scatter plot |
+| `sklearn.preprocessing` | Experimental target scaling |
+| `matplotlib` | Loss curves and scatter plots |
+
+Install with:
+
+```bash
+pip install torch pandas numpy scikit-learn matplotlib
+```

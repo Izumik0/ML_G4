@@ -40,7 +40,6 @@ import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
-from asyncssh import forward
 from sklearn.model_selection import train_test_split
 from torch import optim
 from torch.utils.data import TensorDataset, DataLoader
@@ -51,8 +50,6 @@ import copy
 from sklearn.decomposition import PCA
 import seaborn as sns
 ```
-
-> ⚠️ `from asyncssh import forward` is imported but never used anywhere in the notebook. It appears to be a stray/accidental import (likely autocomplete) and can be safely removed — it also adds an unnecessary dependency on `asyncssh`.
 
 ---
 
