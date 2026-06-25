@@ -51,7 +51,7 @@ Each sample consists of three such units. The model converts these into learned 
 
 Each sample is represented as a fixed-length sequence of **3 integer token IDs** built from fused `{topology}_{sequence}` pairs.
 
-![Tokenisation pipeline](images/tokenisation.png)
+![Tokenisation pipeline](images_toptime/tokenisation.png)
 
 **Vocabulary construction:**
 
@@ -74,7 +74,7 @@ Each sample results in a list of exactly **3 integer IDs** (sequence length is a
 
 ## Data Split
 
-![Data split](images/data_split.png)
+![Data split](images_toptime/data_split.png)
 
 Two-step stratified-random split using `sklearn.model_selection.train_test_split`:
 
@@ -97,7 +97,7 @@ DataLoader: batch size = 16, shuffle = True (train only). Validation and test se
 
 ## Model Architecture
 
-![Architecture diagram](images/arch_diagram.png)
+![Architecture diagram](images_toptime/arch_diagram.png)
 
 ```python
 class GQuadPredictor(nn.Module):
@@ -146,7 +146,7 @@ ReLU is applied only after `fc1` and `fc2`. The last three linear layers have no
 
 ### Loss curve
 
-![Loss curve](images/loss_curve.png)
+![Loss curve](images_toptime/loss_curve.png)
 
 Training stopped at **epoch 4 290** via early stopping.
 
@@ -185,22 +185,6 @@ torch.save(model.state_dict(), '../modele - wytrenowane/model_toptime_good_nomal
 # In-memory snapshot (lost on kernel restart)
 model_fast_save = model.state_dict()
 ```
-
----
-
-## Known Issues & Caveats
-
-### ⚠️ MSE loss scale anomaly
-The MSE values logged during training are in the 10¹⁰–10¹¹ range. Given that `sredni_czas` values are in the range 0–~0.6 (µs), a well-behaved MSE should be on the order of 0.01–0.1. The logged losses suggest that at the time of the run the target values may not have been filtered to the non-zero subset yet, or a different data state was in effect. The R² of 0.78 on the test set suggests the final evaluated model is meaningful; the MSE figures should be treated with caution.
-
-### ⚠️ MAE units mismatch
-The reported MAE of ~99 841 is inconsistent with the target range. This likely reflects a different scale or an earlier run on unnormalised targets. R² is scale-independent and is the more reliable metric here.
-
-### ℹ️ Target scaling not used in training
-The notebook computes two scaling variants (`normalised_avg_time` via L2 norm and `min_max_avg_time` via MinMaxScaler) and exports them to `data_test.csv`, but neither is used during training. The model trains on raw `sredni_czas` values.
-
-### ℹ️ Val/Test DataLoaders unused
-`val_loader` and `test_loader` are defined but commented out. Evaluation uses full-tensor forward passes instead, which is fine for datasets of this size.
 
 ---
 
