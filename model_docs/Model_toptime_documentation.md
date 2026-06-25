@@ -57,21 +57,7 @@ This produces a vocabulary of **20 fused tokens** (`{top}_{seq}` pairs), e.g.:
 
 Each sample results in a list of exactly 3 integer IDs (sequence length fixed at 3).
 
----
 
-## 3. Data Filtering
-
-Before training, zero-valued targets are removed entirely:
-
-```python
-data = df_non_zero   # only rows where sredni_czas != 0
-```
-
-A commented-out alternative shows an earlier approach that sampled 5% of zero-time entries and concatenated them with non-zero rows. The current version discards all zeros, which focuses the model on predicting actual non-zero residence times.
-
-> **Note:** This filtering is applied **after** tokenization and **before** the train/val/test split, so all splits are drawn exclusively from non-zero samples.
-
----
 
 ## 4. Train / Validation / Test Split
 
