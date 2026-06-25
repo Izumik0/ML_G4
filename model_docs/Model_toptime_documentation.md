@@ -41,9 +41,6 @@ Each sample consists of three such units. The model converts these into learned 
 | `seq` | Sequence-type string, e.g. `121` |
 | `sredni_czas` | Target — mean residence time (float, units: ps–µs) |
 
-**Filtering:** All rows where `sredni_czas == 0` are removed before training. The working dataset is ~1 664 non-zero rows.
-
-> **Note:** An earlier version of the code included a commented-out alternative that sampled 5% of zero-time rows and concatenated them with the non-zero set. The current approach discards all zeros entirely, keeping the model focused on predicting actual non-trivial residence times.
 
 ---
 
